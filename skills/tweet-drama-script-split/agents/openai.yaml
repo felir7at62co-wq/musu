@@ -1,0 +1,3 @@
+display_name: 推文短剧剧本拆分
+short_description: 拆分长剧本为分集文件并检查少字。
+default_prompt: 使用推文短剧剧本拆分，把这个剧本拆成分集并检查是否少字。

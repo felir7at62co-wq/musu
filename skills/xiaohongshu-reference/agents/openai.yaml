@@ -1,0 +1,4 @@
+interface:
+  display_name: 小红书参考检索
+  short_description: 只读检索并下载小红书高赞图文参考
+  default_prompt: 使用小红书只读参考检索，按高点赞、图文、近半年筛选并保存可审核候选；禁止任何发布或互动操作。

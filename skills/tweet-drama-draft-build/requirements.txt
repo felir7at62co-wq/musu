@@ -1,0 +1,1 @@
+# No additional pip dependencies are required for the core spoken-subtitle builder.

@@ -1,0 +1,3 @@
+display_name: 推文短剧资产匹配
+short_description: 为镜头脚本生成并检查角色、场景、道具 matched JSON。
+default_prompt: 使用推文短剧资产匹配，为这一集镜头脚本生成 matched JSON。

@@ -1,0 +1,79 @@
+{
+  "name": "dsh-muse-drama",
+  "version": "0.1.0",
+  "description": "DSH 短剧制作插件包：剧变（Jubian）生成工具、短剧流水线门禁与工具、BGM 情绪匹配、成片渲染，以及 17 个短剧技能与 MUSE 品牌资源。",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    "./drama-gate": "./lib/drama-gate/index.js",
+    "./drama-assets": "./lib/drama-assets/index.js",
+    "./drama-shot": "./lib/drama-shot/index.js",
+    "./drama-bgm": "./lib/drama-bgm/index.js",
+    "./drama-render": "./lib/drama-render/index.js",
+    "./drama-settings": "./lib/drama-settings/index.js",
+    "./drama-settings/client": "./lib/drama-settings/client.js",
+    "./jubian": "./lib/jubian/index.js",
+    "./jubian/client": "./lib/jubian/client.js",
+    "./jubian/typert": "./lib/jubian/typert.host.js",
+    "./jubian/remote": "./lib/jubian/typert.remote-client.js",
+    "./bgm-match": "./lib/bgm-match/index.js",
+    "./skills/*": "./skills/*",
+    "./presets/*": "./presets/*",
+    "./assets/*": "./assets/*",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "presets",
+    "assets",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-credentials": "*",
+    "@deepseek-ai/dsh-home-paths": "*",
+    "@deepseek-ai/dsh-atomic-write": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*",
+    "@deepseek-ai/schemastery": "*",
+    "@deepseek-ai/dsh-jubian": "*",
+    "@deepseek-ai/dsh-jubian-api": "*",
+    "zod": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": { "optional": true },
+    "@deepseek-ai/dsh-tools": { "optional": true },
+    "@deepseek-ai/dsh-credentials": { "optional": true },
+    "@deepseek-ai/dsh-home-paths": { "optional": true },
+    "@deepseek-ai/dsh-atomic-write": { "optional": true },
+    "@deepseek-ai/dsh-typert-protocol": { "optional": true },
+    "@deepseek-ai/schemastery": { "optional": true },
+    "@deepseek-ai/dsh-jubian": { "optional": true },
+    "@deepseek-ai/dsh-jubian-api": { "optional": true },
+    "zod": { "optional": true }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "drama",
+    "short-drama",
+    "jubian",
+    "muse"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/felir7at62co-wq/musu.git"
+  }
+}

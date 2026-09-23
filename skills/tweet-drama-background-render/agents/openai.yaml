@@ -1,0 +1,4 @@
+interface:
+  display_name: "推文短剧后台渲染"
+  short_description: "使用 FFmpeg 后台渲染并批量导出推文短剧 MP4"
+  default_prompt: "Use $tweet-drama-background-render to render validated Jianying-ready episodes into final MP4 files in the background."

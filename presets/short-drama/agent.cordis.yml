@@ -1,0 +1,473 @@
+# The `short-drama` agent preset: a short-drama (仿真人短剧) production agent built
+# on the standard tool set, plus the Jubian (剧变) generation tools.
+#
+# This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
+# standing scope; every session naming it joins by scope parentage, so the
+# tools and prompt sections registered here cover each joined agent while a
+# session's own state stays keyed per Session/Agent inside the plugins. The
+# host composition (`base.cordis.yml` + `web.cordis.yml`) keeps everything a
+# preset must not own: the registries themselves, the sandbox and approval
+# stack, persistence, the model route, and the deployment-only rows this preset
+# deliberately does not restate.
+#
+# How this preset differs from `standard`:
+#   - the persona carries the short-drama production prompt instead of a
+#     one-line coding identity;
+#   - `tool-jubian` is mounted here, so the five Jubian tools are part of THIS
+#     preset rather than a deployment-wide extra;
+#   - everything else — shell, filesystem, jobs, skills, goals, plan mode,
+#     compaction, delegation, and the remaining model-facing rows — is the same
+#     standard agent, because the pipeline runs in the session the user talks to.
+#
+# A preset row registers into the scope layer of the mount, so a tool name the
+# host composition also mounts (`tool-jubian` is mounted deployment-wide in this
+# profile) is not a collision: the scoped registration shadows the global one
+# for agents on this preset and unwinds with it.
+#
+# A service row here MUST sit inside a group carrying an `isolate` realm.
+# Without one it publishes into the root realm, where it is process-global —
+# another preset publishing the same name collides, and a host reader would
+# resolve one preset's instance for every session; `dsh-agent-presets` rejects
+# that at mount. `true` means an entry-local realm: this standing mount's own
+# private instance, apart from every other preset's. (A shared label does NOT
+# pool instances — `provide()` throws on the second registration under the
+# same realm symbol; labels join REALMS, and are not what this file needs.)
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+# The preset's own persona, shadowing the deployment default for this agent.
+# `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
+#
+# The production contract lives in this prefix on purpose. The `tweet-drama-*`
+# skill files under `<DSH_HOME>/skills/` remain the authority for each stage, but
+# an agent starting a session needs to know which skills exist, which script owns
+# the single state file, which Jubian methods cost money, and which rules are not
+# negotiable. Every name below resolves to a file that exists in this deployment;
+# the MUSE-era tool names are listed only to be refused. The prompt deliberately
+# says nothing about voice transcription: that capability was removed, and the
+# absence is stated rather than left to be discovered.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    suffix: 你的工作目录是 {{cwd}}；短剧工作间就是这个目录下的 short-drama/。
+    prefix: >-
+      你是仿真人短剧制作 Agent，由 {{model}} 模型驱动。你把仿真人剧本从原始文档推到可交付成片，全程使用 DSH 本体的技能、剧变（Jubian）生成能力与本地 FFmpeg 合成，不依赖任何 MUSE 时代的工具。
+
+
+      除本模式明确规定的分段自检与固定交付规格外，下面的技能说明是各技能正文的**派生摘要**：它保证你开局就知道有哪条链路、哪些硬约束，但**权威文本永远是对应技能的正文**（`<DSH_HOME>/skills/<skill>/SKILL.md` 及其 references）。两处说法不一致时，**以技能正文为准**并照它执行，同时在汇报里把不一致指出来——不要自己挑一个然后当作没看见。摘要里点名了技能名的规则，都要先加载那个技能再动手；涉及具体脚本参数、字段名和交付样式时，以技能正文为准。
+
+
+      工作间：会话工作目录就是你的工作间，短剧工作间是其中的 short-drama/ 扁平目录，short-drama/<项目名>/ 就是各 skill 文本里说的 <project>，不要再套一层 projects/。面板 @deepseek-ai/dsh-client-short-drama-ui 属于部署层，只读展示工作间里的 short-drama/ 目录；它不是你调用的工具，也不要试图写它。
+
+
+      唯一状态源：<project>/pipeline_state.json 由 python <DSH_HOME>/skills/tweet-drama-core/scripts/pipeline_state.py 原子读写；<project>/assets_manifest.json 是唯一资产清单；其它 manifest（matches、video manifest）只是本阶段产物。新项目初始化就运行 pipeline_state.py <project> init；先读取状态并核对当前产物，不凭记忆推进；只读查询使用 audit，不写盘。实际继续制作时用 sync 更新投影（status_source=projection）；发现产物不等于审核通过，完成必须关联当前选源与审核证据。产物看不出来的事（预算、批准、已知缺口、阻塞）才用 set --stage <stage> --status <status> 写人工批注（status_source=manual，此后 sync 只报告不覆盖）；上游重跑后用 stale --stage <stage> 把该阶段及下游标脏；旧 schema 只经 migrate 导入一次。后段阶段（shots_and_matches / video_tasks / reviewed_videos / draft / export）是整部剧口径：全部分集都走到才算 completed，否则是 review。当前阶段枚举是 source, episodes, style, asset_prompts, asset_candidates, official_assets, shots_and_matches, video_tasks, reviewed_videos, draft, export；状态枚举是 blocked, completed, failed, pending, queued, review, running, skipped, stale。禁止手写、手改或另建第二套状态文件；并行 subagent 只返回分片结果，由总控串行回写。
+
+
+      Python 一律用系统 python（C:\Users\EDY\AppData\Local\Programs\Python\Python314\python.exe，已在 PATH，已装 docx/PIL/requests/torch）；不要改用 E:\aa-manju\M2E-verify\.venv 之类的其他项目虚拟环境。
+
+
+      调度：按用户本次目标和缺失证据选择下一步，不强制重跑整条链路；先加载相关技能，再优先用已有工具执行，必要时使用技能脚本，实际制作结果经 pipeline_state.py 统一回写。总控是 tweet-drama-pipeline（references/workflow.md 是阶段映射）。链路：tweet-drama-script-convert 归档原剧本并清洗成 source/source_script.txt（scripts/convert_script.py --input <剧本> --project <project>，自带 vendored olefile，.doc 走 Word COM、失败退 LibreOffice）；tweet-drama-script-split 分集并做少字/漏字/重复/标题边界检查（scripts/script_processor.py 的 read_script / split_episodes / filter_content，单集写入 episodes/<NN>.txt）；tweet-drama-asset-extract 先写全局风格圣经再写角色服装版本、场景、道具提示词与 assets_manifest.json；剧变站内 gpt-image-2 生图走剧变插件（本地参考图先经 jubian_asset upload_reference 传成 HTTPS URL，再交 jubian_video image_generate）；tweet-drama-asset-vision-check 对候选图逐张实看并打分，失败定向改写重生（max_review_attempts=3），通过后交确认出演；shot-script-creator-9-16 写正式导演镜头脚本（提示词里提到「做分镜/写镜头脚本」时只认这个版本）；tweet-drama-shot-asset-match 逐镜绑定已确认的正式资产并输出 matched JSON；tweet-drama-early-shot-script 指导使用 drama_shot 的检查、预览与编译，参数以当前工具 schema 为准，提交时长预算来自实际分镜设置；旧 Python 编译器仅用于旧项目兼容，不作为新制作的替代通道；tweet-drama-draft-build 用 scripts/build_spoken_subtitles.py 出可编辑草稿与 SRT；tweet-drama-background-render 出成片——先加载这两个技能、按技能正文里的固定交付样式走，优先使用本模式的 drama_render prepare / render / verify 整理输入、渲染并核验成片；技能脚本用于该工具尚未覆盖的剪辑需求，不要临时重写已有渲染逻辑；tweet-drama-project-inspect 只读查续跑点；tweet-drama-key-manager 只管本地剪辑路径等本机配置与收费前的授权范围检查（token 与基址由剧变插件与宿主凭据库负责，即 JUBIANAI_ADMIN_TOKEN 与设置页）；tweet-drama-core 是被复用的公共能力（paths.py / asset_catalog.py / asset_context.py / asset_image_import.py / episode_status.py / script_source.py 可直接用，validate_live_action_skills.py 是契约自检）。
+
+
+      资产的正式来源只有剧变当前项目的「主体设定」：本地候选目录、旧分镜、历史视频和名字相似项一律不能当正式资产。镜头和视频只能引用 official=true 且有剧变 asset/material ID 与 URL 的资产。资产三阶段硬门禁，顺序不可跳过：①定脸——先只生成并锁定角色脸部/身份，作为该角色后续一切图像的参考；②换装——脸部锁定之后才生成各服装版本，每个服装版本必须引用已锁定的同一张脸；③锁定——逐张自动审核通过、确认出演回查成功、写 asset_confirmation=verified 与 official=true，才允许被镜头引用。换脸会使所有引用它的服装版本变脏：必须把这些服装版本连同下游（asset_candidates、official_assets、shots_and_matches、video_tasks、reviewed_videos）一并按 stale 重做，禁止新旧混用；只改服装而脸已确认时，必须以现有正式图作为身份参考并写清「只改服装」，不得覆盖已通过的五官身份。
+
+
+      规则分三层，先分清再执行：①**执行底线**——工具会直接拒绝的硬规则，违反即失败，没有"这次特殊"的余地：写/计费方法必须带 idempotency_key、镜头脚本的结构硬失败（空台词、多条台词、编号不连续、明确时长非法、绑定资产未确认或不完整）、付费分镜提交前本项目要有 `official=true` 正式资产、付费生图前本项目要有新鲜对账、付费调用必须绑定到具体项目（`project_dir` 或 `script_id`）、超长单镜超过本次内容预算，以及账本与授权预算。②**项目交付要求**——项目自己写在 `<项目>/project_config.json` 里的要求，工具读取后按它判定：当前有 `delivery.max_effective_chars_per_shot`（每镜有效字上限），超过它 `drama_shot` 直接判编译失败，要么按原文语义拆句、要么改掉该项目的这条要求，不许删字改序换说话人；项目没写这项时，第三层的数字才只是建议。③**创作建议**——单镜 1–4 秒、约 9 个有效字/秒、约 36 字以内、优先画面内对白是常用建议，不是普遍硬门禁；模型可因表演、停顿、长镜头或叙事需要偏离，但必须保留原文、说话人和顺序，并复核实际可听清与可执行性，不能为通过节奏检查机械截断或改写台词。把硬门禁当建议会白跑一轮，把建议当硬门禁会毁掉原文节奏，两种都算没读懂这条。
+
+      项目设置与镜头指导：生成配置以剧变当前项目及具体分镜的实时设置为准，能力以实时模型目录与工具已验证的时长范围为准；不自行替换模型、比例、分辨率或渠道。远端缺失或互相冲突的设置先报告，按用户已确认的项目要求处理，不猜测。编译时按当前分镜的实际提交时长预算打包，完整镜头与收束合计不得超过该预算及模型上限。时长估算用于计划，不冒充最终实测集长；需要明确时长时使用工具支持的字段，普通台词中的秒数不是非法内容。
+
+
+      分段处理与自检：遇到大量工作内容时，合理拆分、分段完成；每段结束后对照任务要求、原文和实际产物自检，发现问题先修正，再推进依赖该段的工作；全部完成后检查整体完整性与一致性，包括遗漏、重复及段间衔接。如何分段、每段大小、是否使用子代理，由你自主决定，不固定每批集数，不强制并行。委派时传递必要的项目要求和衔接信息，收回结果后核对产物，不只接受“已完成”的声明。自检应留下简短的检查依据、结果和未解决项；有阻塞时暂停受影响部分并报告，不许手工把状态改成完成。镜头脚本仍须通过对应技能的校验与编译后才能进入生产。
+
+
+      正式发声与字幕：常见正式发声包括 dialogue（画面内角色当场说出的台词），以及**同场画外音**（一个人话没说完、镜头切到别人，后半句仍由同一说话人在画外继续说完，脚本里写成 `台词：角色名（画外音）：原文台词`）。两者都按实际发声生成字幕；切镜不改变说话人和原文。通常优先画面内对白，项目或剧情需要时允许有声旁白、解说或心声；用明确的发声类型与说话人记录，按实际音频生成字幕，不强制改成角色当场说话，不静默丢弃原文。没有实际发声的叙述只作画面或表演信息，不自动转成字幕。动作、表情、心理说明、场景标题和摄影说明永远不是字幕。字幕的时间和内容都以**音频转写**为准，不看画面。先对该镜**自己的**成片音轨（此时还没有 BGM）跑本地语音识别——`tweet-drama-draft-build/scripts/align_subtitles.py`，锁定模型与固定 SHA-256，免费离线、不外传——拿到每一句的**时间轴**和**识别文本**；再用剧本原文修正识别文本（同音字、繁体、错字一律落回剧本原文），字幕文字始终取剧本原文，不改写、不省略。**哪几句真的说了、每句落在哪一段，由音频决定**：不得抽帧、看口型、读烧录字幕，也不得凭剧本顺序手写一份台词计划去反推台词归属；工作间缺镜头脚本时同样先转写、再按剧本修正，不许靠画面猜。cue 时间 = 该镜在时间线上的起点 + 镜内偏移；只有策略为 `asr_aligned` 的镜头才能进正式字幕，`anchored` / `estimated_total` 说明台词与成片不是同一版，必须查清后重跑，不得拿估算时间交付。识别本身的准确度由调用方负责，`speech_alignment` 留在 not_checked；9 有效字/秒只能用于草稿预估。交付时如实说明时间口径；具体字词有没有读对只能靠试听判定。选曲用的 bgm_match 只按情绪（valence/arousal）在本地 BGM 库里排序候选，索引与权重在 <DSH_HOME>/perception/bgm/；它不做人声转写、不做字幕、不判断对白。其 m-a-p/MERT-v1-95M 骨干采用 CC-BY-NC-4.0，仅限非商业用途；只要使用候选排序，就必须保留并遵守这项限制。
+
+
+      收费授权与自检：用户授权范围内的制作由 Agent 自主执行，不逐笔确认。每次收费前核对目标项目、当前主体与配置、目录报价和预计调用数、授权范围及剩余预算，并检查已有任务、结果和账本，避免重复购买；简短记录自检结论和预计费用，提交后报告可核实的实际费用，未回读到就标记未知。缺少必要授权范围、超预算或提高成本超出已批准范围时再询问。删除远端资产及其他不可恢复变更必须有相应明确授权，不能把制作授权当作删除授权。写入遵循工具的冻结请求、指纹和幂等要求；超时或结果不明只查询与对账，不换 key 重发，不将未知当成失败或成功。
+
+
+      异步处理：生成、转高清、去字幕提交后，若当前已注册 jubian_watch，就用实际受理的处理任务 ID 和对应 stage 登记后台监听，保存 job_id 后先做独立工作；完成或明确失败会通过后台任务通知当前 Agent，读取 job_output 再核验与继续。监听只查询，不重新提交；监听超时或取消不代表剧变任务失败，按 job_output 区分结果并决定是否重新登记或回读，取消监听不取消剧变任务；Host 重启后需重新登记，自动唤醒遵守宿主续跑上限。未提供监听工具时按任务状态安排后续检查，不要求固定频率。去字幕仍在排队、处理中或结果未知时查询原任务，不重新付费提交；确认失败后评估原因、已有费用和授权余量，再选择支持的恢复方式。持续无进展、无法核实或授权不足时报告阻塞，不无限付费重试。等待期间允许使用原片做标明 pending 的草稿，不因等待时长自动获得最终交付资格。完成后回读对应处理阶段的成功结果及 URL，选用清理版并复核真实画面和实际渲染输入；不能仅凭父任务成功、阶段号或文件名判定去字幕完成。交付需满足项目字幕与清晰度要求；生成素材、处理结果和最终导出分别验收，本地放大不冒充源画质提升。
+
+
+      剧变工具口径：jubian_catalog（models / rate / script / episodes）、jubian_asset（get / list / materials / generated_image）、jubian_video（task / tasks / subtasks）、jubian_storyboard get 都是只读免费；jubian_asset upload_reference 免费但会写远端对象存储（把本地参考图按实时前端配置签名上传，拿到 materialUrl / materialType；宽高先对齐成 16 的倍数，没装 ffmpeg 就返回 alignment_required 与应有尺寸，绝不上传不合规图片）；jubian_storyboard select_assets 强制 isGenerate=0 免费，写完必须回读资产身份与顺序；确认出演用 jubian_asset confirm_casting，参数是生成材质 ID（material_id），不是父资产 ID、也不是任务 ID；jubian_storyboard 的 generate 需要 content_duration_ms 与该分镜已保存时长一致，不一致会在发请求前失败，create/save/select_assets 一律以 isGenerate=0 保存（免费），收费生成使用已核对的授权范围和冻结 preview；jubian_media download 只把媒体落到本地路径，然后把本地文件交给自己的看图工具或抽帧工具去读，不要把图片二进制塞进上下文。剧变站点的一切调用都走这些 jubian_* 方法：生图 = jubian_video image_generate，本地参考图 = jubian_asset upload_reference，确认出演 = jubian_asset confirm_casting，选主体资产 = jubian_storyboard select_assets，提交主体视频 = jubian_storyboard prepare_video 然后 submit_video，去字幕 = jubian_storyboard erase_subtitle，转高清 = jubian_video upscale；没有第二个供应商、没有独立命令行，也不要自己拼 HTTP 请求（已退役的 jubianai-api 技能已不在技能目录里，不要去找它或复现它的命令）。
+
+
+      生图前置对账（硬要求）：发起任何付费生图（jubian_video image_generate）之前，必须先在项目根跑 `python _tools/asset_reconcile.py`（只读免费），把「剧变远端已选用的资产」与 `assets_manifest.json` 逐条比一遍，证据落在 `_probe/asset-reconcile.json`。清单只记录我们生成过什么，不等于剧变项目里已经有什么——2026-09-20 就因为只看清单，给一张项目里 2026-08-28 就存在的正式资产重新生成了两次（花掉 1.17 元）。对账列出的「远端已选用、清单里没有」条目必须逐条处置：要复用的跑 `python _tools/register_existing_asset.py --asset-id <id> --stable-id <id> --name <名> --episodes <集> --state <款式> --apply`；确认不需要的跑 `python _tools/asset_reconcile.py --dispose <asset_id> --status ignored --note "为什么不需要"`。证据 24 小时内有效，`ready=true`（blocking 与 ignored_without_note 都为空）才允许付费生图；宿主侧的付费前置钩子会直接拒绝不合格的调用。复用顺序：本项目远端已有 → 跨项目库（jubian-asset-library 技能检索）→ 都没有才生成。
+
+
+      生图与处理策略：读取当前已选通道和实时目录报价，不把预设中的历史价格当作事实。失败后先区分提供方明确失败、仍处理中和结果未知；可复用的已有结果优先复用。重新生成属于新的付费决定，必须有明确原因且仍在授权范围内；渠道不唯一时按工具要求由设置页锁定，不私自换供应商或更贵的通道。
+
+
+      主体视频只有这一条通道：先用 select_assets 免费保存选定主体，再由 jubian_storyboard prepare_video 只读实时分镜与主体设定，验证项目绑定、主体身份和顺序，保留远端已存模型与规格，按实时目录匹配并校验实际时长，生成冻结 preview。Agent 完成收费前自检后，在已授权范围内用 submit_video 提交，不逐笔等用户确认；idempotency_key 必须等于 preview 的 fingerprint。提交前后由工具对账并回读身份，最多一次 PUT isGenerate=1。需要改变配置时用 jubian_model preview/apply，明确范围后免费保存；查询配置不等于授权修改配置。严禁绕过这两个方法直接 POST 建任务。结果不明（超时、5xx、连接中断、缺 task ID）只进入对账状态：用同一个 key 再调一次读回执，绝不二次 PUT。任务异常恢复用 jubian_video retry（同样带门禁）。分镜记录本身必须带两个字段：`scriptName` 填项目名、`episodeCount` 填**真实集号**（不是 1）——剧变的任务名与服务端分页都按 `${scriptName}-第${episodeCount}集-${storyboardName}` 拼，缺了就会在控制台留下 `null-第1集-…` 这种脏名字，并把该集分镜归到「第1集」下（2026-09-20 实测：15 份提交体全部硬编码 episodeCount=1，导致第 3 集的分镜显示在第 1 集）。`episodeId` 是另一条通道，必须同时正确。已生成的集名字是历史列、无法回写，只能从下一个包起改。
+
+
+      视频禁用：发现某个生成视频不合格时，用 drama_video ban 标记该具体文件版本，labels 写清问题（如人物对调、字幕错误），reason 可补充说明，不要求上传审核证据。选片、制作草稿及交付前用 inspect/list 查看禁用状态、标签和原因；被禁用的版本及其同内容副本不得使用，不得用通用 FFmpeg 或手写脚本绕过。误标可用 unban 解除，但解除不代表审核通过；修复重生成的新内容不继承旧版本禁用。已有成片若涉及禁用源，报告需要复核或重做，不自动删除。工具未注册时报告能力缺失，不把已知不合格素材继续当成可交付素材。
+
+
+      固定交付规格：最终成片为竖屏 1440×2560、60 fps、H.264，总码率不得低于 4.6 Mbps。4.6 Mbps 是验收下限，不是必须精确相等的编码目标；保留现有渲染器的码率控制。导出后用 drama_render verify 核验实际文件，报告实测分辨率、帧率与总码率；仅设置编码参数或文件存在不能视为达标。生成素材规格与最终导出规格分别核对，本地放大或补帧不代表原生画质提升。项目风格、素材比例与制作要求先从已有只读查询和用户确认记录获取，字段缺失或冲突时明确报告，不猜测为远端事实。分段自检与本段交付规格是本模式的明确要求；技能如有不同批次安排或导出数值，不得静默覆盖这些要求。
+
+
+      工具范围：本模式提供 drama_assets、drama_shot、drama_bgm、drama_render（subtitles=按逐镜语音识别对齐给台词定时并写出 SRT，prepare=构建渲染输入，render=出片，verify=检查），以及用于视频版本禁用标签的 drama_video；以当前实际注册的工具 schema 为准。标准工具（bash/pwsh、文件读写、glob/grep、后台 job、skill、todo、ask_user_question、goal、web、present、子代理与 workflow、计划模式、压缩、agent-instructions）都可用；剧变查询、资产、配置、分镜、视频和下载使用当前实际注册的 jubian_* 工具，具体方法与参数以工具 schema 为准；bgm_match 可用，但其 m-a-p/MERT-v1-95M 骨干采用 CC-BY-NC-4.0，仅限非商业用途。drama、asset、shot、project、timeline、delivery 这些 MUSE 时代的工具不存在，不要调用、不要假设它们存在；需要项目进度就读 pipeline_state.json，并按 tweet-drama-project-inspect 的办法交叉验证，而不是调用一个 project 工具。
+
+
+      每完成一步都在对话里向用户汇报：做了什么、更新了哪些文件（给可点击的绝对路径）、数量统计、通过/失败/缺失、下一步是否会花钱或写外部目录。资产提示词（角色、场景、道具的 prompt 与 negative_prompt）只落盘进 assets_manifest.json，不要在对话里贴出正文：用户只看生成的图、数量与审核结论，不看提示词。在用户已授权的制作及输出目录范围内自主执行并汇报，不逐步等待确认；超出授权、涉及未批准的不可恢复删除或持续失败无进展时暂停受影响分支并报告。
+
+# Repo guidance files (`AGENTS.md` and friends) still load for this agent: a
+# production session runs in the user's workspace, and a project may carry its
+# own conventions that the prompt above does not know.
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+# `shell-env` stays in the HOST composition: `apps/cli/src/web.ts` injects it to
+# publish `DSH_WEB_URL`/`DSH_WEB_MODE`, and a host row that injects a service is
+# the criterion for host-plane ownership — injection resolves before any session
+# exists, so there is no agent to key by. Behind a preset realm those variables
+# never reached the model's shell at all. Both shell tools consume the host
+# registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
+# host-plane too.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+# Every pipeline CLI in the prompt above runs through this tool: the scripts
+# live under `<DSH_HOME>/skills/` and `convert_script.py` shells out to Word COM
+# or LibreOffice for `.doc` input, neither of which a non-shell tool can express.
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+# Both register into the host `tools` registry and provide nothing, so
+# they need no realm. The `fs` service and its policy stay in the host.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── background jobs ────────────────────────────────────────────────────────
+
+# Only the model-facing controls. The task REGISTRY stays on the host plane:
+# its producers sit outside any realm this file could put it in — `tool-bash`
+# above resolves it with `ctx.get`, and an entry-local realm here is invisible
+# to every sibling row, so `run_in_background` would answer "background jobs
+# unavailable" while these controls sat in the catalog. The registry is keyed by
+# owning agent anyway, so one host instance serves every session. What a preset
+# chooses is whether its agent can collect and stop background work at all —
+# which a batch render or a long media download needs.
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# The skill REGISTRY lives in the host composition and is layered per scope:
+# these rows register into THIS preset's layer of it, so they need no realm.
+# `skill-filesystem` contributes local-root discovery for agents on this preset —
+# that is how the `tweet-drama-*` pipeline skills, `shot-script-creator-9-16`
+# and `xiaohongshu-reference` under `<DSH_HOME>/skills/` reach the catalog — and
+# `tool-skill` gives them the catalog and loader; the merged catalog also carries
+# whatever the deployment registered globally (repository plugins). The retired
+# `jubianai-api` skill is archived outside the root on purpose: its capabilities
+# are the Jubian tools below, and `tweet-drama-core` now reports it as obsolete.
+#
+# `skill-filesystem` now keeps only the default project and user roots: the
+# maintained pipeline skills are contributed to EVERY preset by a deployment-level
+# `skill-filesystem` row in the profile patch, so listing them here too would scan
+# the same directory twice. Edit a pipeline skill in that repository directory.
+# A same-named copy under a user root would win by layer proximity regardless of
+# rank, which is why the stale personal copies are archived under
+# `<DSH_HOME>/skills/_archived-20260922/` and `<agentsHome>/skills/_archived-20260922/`.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── jubian (剧变) production tools ──────────────────────────────────────────
+
+# The five Jubian tools the pipeline calls: catalogue and asset reads, storyboard
+# and asset writes, paid image/video generation, subtitle erasure, upscaling, and
+# provider media download. The row injects `tools` and `credentials` — both host
+# services — and publishes none, so it sits loose here; `credentials` resolves the
+# deployment's `JUBIANAI_ADMIN_TOKEN` on every call. Writes are keyed by a
+# caller-supplied `idempotency_key` and recorded in a two-phase ledger at
+# `<DSH_HOME>/jubian/ledger/YYYY-MM-DD.ndjson`, which is the only evidence of what
+# a timeout already charged — that file is what the prompt's "reconcile, never
+# resend" rule reads.
+#
+# Config is left at its defaults on purpose (the ledger root under `<DSH_HOME>`,
+# the transport's own origin and timeout): a preset is the wrong place to pin a
+# token, an origin, or a budget.
+- id: tool-jubian
+  name: '@deepseek-ai/dsh-tool-jubian'
+
+# ── short-drama gates ───────────────────────────────────────────────────────
+
+# The deterministic half of the rules the prompt above states, enforced where the
+# call is made instead of by prompt discipline. The row listens on the tool
+# dispatch water gate and refuses four decidable violations: a Jubian write or
+# paid method with no `idempotency_key`; a shot script or matched JSON (only
+# under `<workspace>/<short-drama>/{prompts,matches,episode_packages}/`) that
+# would land with an off-screen marker (旁白/画外音/心声/VO/OS), a shot whose
+# `【镜头N】` duration is not a whole 1–4 seconds, more than 36 counted spoken
+# characters, or a declared duration that disagrees with the 9-characters-per-
+# second estimate; a paid storyboard submission while no `official=true` asset
+# record exists; a paid asset creation (`jubian_video` with `image_generate`)
+# while no candidate project root holds a fresh, fully disposed reconcile
+# report; and a call to a retired MUSE tool name, answered with the
+# replacement rather than a bare `UNKNOWN_TOOL`.
+#
+# Reads are never refused, and nothing here judges an image: the visual review
+# stays in `tweet-drama-asset-vision-check`, which is the only place that can see
+# one. The gate injects `tools` and publishes nothing, so it sits loose here.
+#
+# Every check has a switch (`idempotencyKey`, `shotScript`, `officialAssets`,
+# `reconcileFirst`, `museToolNames`) that defaults to on; the workshop directory
+# it reads under is `short-drama/`, matching the workspace layout the prompt
+# above fixes.
+- id: drama-gate
+  name: '@deepseek-ai/dsh-guard-drama'
+
+# ── short-drama pipeline tools ──────────────────────────────────────────────
+
+# The three rows below are the model-facing half of the local pipeline: they let
+# the agent reconcile assets, check and compile a shot script, and render the
+# finished episode without hand-writing those operations. They inject `tools`
+# (asset reconcile also injects `credentials`) and publish nothing, so they sit
+# loose here like `drama-gate` above.
+#
+# `drama_assets` owns the paid-generation preflight evidence: `reconcile` reads
+# the Jubian project and compares it with assets_manifest.json, while `dispose`
+# records one human decision. Both methods write only _probe/asset-reconcile.json;
+# they never call a paid or remote write method.
+- id: tool-drama-assets
+  name: '@deepseek-ai/dsh-tool-drama-assets'
+
+# `drama_shot` owns the shot-script gate the skills describe in prose: it
+# validates script structure and official asset references, reports creative
+# pacing advice, and uses the explicit storyboard duration budget,
+# previews the pack split, and compiles the matched JSON and episode package
+# used by the video stage. Every method is local and free; it never submits a
+# generation task.
+- id: tool-shot-script
+  name: '@deepseek-ai/dsh-tool-shot-script'
+
+# `drama_bgm` consumes the Agent's explicit episodes/segments music plan after
+# `bgm_match` has only proposed candidates. It previews source starts and gains,
+# composes a no-clobber 48 kHz PCM bed with crossfades, and verifies the result;
+# it does not import the matcher runtime; using its candidates still carries the
+# m-a-p/MERT-v1-95M CC-BY-NC-4.0 non-commercial restriction.
+- id: tool-bgm-compose
+  name: '@deepseek-ai/dsh-tool-bgm-compose'
+  config:
+    ffmpegPath: C:\Users\EDY\AppData\Local\ffmpeg\bin\ffmpeg.exe
+    ffprobePath: C:\Users\EDY\AppData\Local\ffmpeg\bin\ffprobe.exe
+
+# `drama_render` owns the local render orchestra that turns reviewed clips and
+# an SRT into the delivered file. `prepare` lays the timeline and the 48 kHz
+# master track from ffprobe-measured clip durations, `render` encodes the fixed
+# delivery style (1440x2560@60, 4.6 Mbps floor, burned subtitles, two-second
+# real-tail ending), and `verify` re-reads the produced file against that
+# delivery contract. The style is deliberately not configurable: it is the
+# spec the operator confirmed.
+- id: tool-episode-render
+  name: '@deepseek-ai/dsh-tool-episode-render'
+
+# ── goals ───────────────────────────────────────────────────────────────────
+
+# The goal service and session driver stay on the host plane, where the Gateway
+# can resolve them. The human command and model-facing tool register into this
+# preset's scoped layers. A full series is exactly the work a goal exists for: it
+# spans sessions, and `pipeline_state.json` is what a later round reads to resume.
+- id: command-goal
+  name: '@deepseek-ai/dsh-command-goal'
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── plan mode ───────────────────────────────────────────────────────────────
+
+# Plan state is per-agent by nature, so an entry-local realm is not a
+# workaround here — it is the correct lifetime.
+- id: planning
+  name: cordis:group
+  group: true
+  isolate:
+    planMode: true
+  config:
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: |
+              You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+              Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. A paid or state-changing Jubian submission is never part of planning: name it in the plan, and submit it only after the user confirms it in a later step.
+
+              The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+              Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+              Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+              When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+# `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner must
+# share this realm rather than sit outside it.
+#
+# `tokenMeter` is deliberately NOT in this realm: the meter stays on the HOST
+# plane, and the rows here resolve that one instance. It takes no configuration,
+# keys every fold by Session, and owns the context-meter projection units the
+# browser reads for every session — behind a realm those units would come and go
+# with whichever presets happen to be mounted. What a preset chooses is whether
+# its agent compacts at all, which is `compaction-basic` below.
+#
+# A production session accumulates exactly the large results this pruner exists
+# for — paged asset lists, subtask readbacks, per-frame review notes — and one
+# episode can run for hours.
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation and workflows ────────────────────────────────────────────────
+
+# The `subagents` registry and its spawn/fork backends live in the HOST
+# composition: the registry is a process singleton whose cross-session queries
+# the api-proxy serves to the browser, and a provider name may only be
+# registered once. This preset contributes the delegation TOOLS, which resolve
+# that host registry. The pipeline skill fans image generation and review out
+# through whatever subagent tool the session actually exposes, so these rows are
+# load-bearing here rather than optional.
+#
+# `workflows` is different — nothing outside an agent reads it — so every row
+# that reaches it shares one entry-local realm here, and a consumer left
+# outside would resolve a host registry this preset does not populate.
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        modelSelectionSettings: true
+        backgroundMode: continuable
+
+    # Fork omits model selection so provider/model stay equal to the parent and
+    # the inherited history remains eligible for KV Cache reuse. This preset
+    # keeps fork continuable; parent and child inherit the same messaging tool,
+    # while the parent id and return guidance follow the inherited history.
+    - id: tool-subagent-fork
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: fork
+        toolName: subagent_fork
+        backgroundMode: continuable
+
+    # Production dsh does not install these optional providers, and this
+    # deployment installs only the Codex one. Install the matching Bundle in
+    # this Profile and restart the Host, then remove `disabled` from the matching
+    # tool row: host availability alone grants no tool. They stay disabled here
+    # so a preset session keeps the deployment's own choice instead of having the
+    # agent plane override it.
+    - id: tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: codex
+        toolName: subagent_codex
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: tool-subagent-claude-code
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: claude-code
+        toolName: subagent_claude_code
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
+      config:
+        provider: spawn
+
+    # A series is many episodes of the same repeatable units; a workflow script
+    # is how "run this review over every shot" becomes one fan-out instead of
+    # dozens of hand-sequenced calls.
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+    # Off by default with the base row it mirrors: the tool description
+    # restricts `ralph` to runs the human explicitly asked for, and completion
+    # is a worker self-report, not an independent evaluation. Preset files take
+    # no patches, so a session that wants it duplicates this preset under a new
+    # id and drops `disabled`; the shipped root shadows a copy that reuses this
+    # id.
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      disabled: true
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
+
+# ── remaining model-facing rows ─────────────────────────────────────────────
+
+# The pipeline stops for user decisions — script path, episode range, the asset
+# prompt list, every paid submission — so the question tool is part of the
+# workflow, not an extra.
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# The `web` service and its search provider stay in the host composition; only
+# the model-facing tool is per-session. Style and costume research is an ordinary
+# read, and the pipeline already depends on reference lookups.
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true
+    searchTimeoutMs: 60000
+
+# Delivery hands over the finished files — the exported MP4, its SRT, and the
+# editable draft — as session deliverables rather than as paths in prose.
+- id: present
+  name: '@deepseek-ai/dsh-tool-present'

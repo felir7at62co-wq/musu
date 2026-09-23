@@ -1,0 +1,53 @@
+# dsh-muse-drama 的组合包补丁：一次把全部短剧制作插件插进 profile。
+#
+# 行 id 与短剧预设、旧部署里用的 id 一致（tool-jubian / drama-gate /
+# tool-drama-assets / tool-shot-script / tool-bgm-compose / tool-episode-render /
+# drama-settings / perception-bgm），所以在比较近的层里覆盖同一行即可换成本包实现，
+# 预设与既有 patch 不需要改名字。
+#
+# 各行的 config 全部可省略，省略时用插件默认值。需要在用户 profile 里覆盖的只有两处：
+#
+#   - id: tool-bgm-compose          # 剪辑合成要调 ffmpeg
+#     config:
+#       ffmpegPath: 'C:\path\to\ffmpeg.exe'
+#       ffprobePath: 'C:\path\to\ffprobe.exe'
+#
+#   - id: perception-bgm            # bgm_match 要一个装了 torch 的 Python 与情感头权重
+#     config:
+#       pythonExecutable: 'C:\path\to\python.exe'
+#       weightsPath: 'C:\path\to\J_all.ckpt'
+#       dataDir: 'C:\path\to\data'
+#       catalogUrl: 'https://muse.tos-cn-beijing.volces.com/bgm/index.json'
+#       env:
+#         HF_HOME: 'C:\path\to\hf-cache'
+#         HF_HUB_OFFLINE: '1'
+#         OMP_NUM_THREADS: '1'
+#         MKL_NUM_THREADS: '1'
+#         OPENBLAS_NUM_THREADS: '1'
+#
+# bgm_match 的候选排序底层是 m-a-p/MERT-v1-95M，CC-BY-NC-4.0，仅限非商业用途。
+
+- insert:
+    - id: tool-jubian
+      name: 'dsh-muse-drama/jubian'
+
+    - id: drama-gate
+      name: 'dsh-muse-drama/drama-gate'
+
+    - id: tool-drama-assets
+      name: 'dsh-muse-drama/drama-assets'
+
+    - id: tool-shot-script
+      name: 'dsh-muse-drama/drama-shot'
+
+    - id: tool-bgm-compose
+      name: 'dsh-muse-drama/drama-bgm'
+
+    - id: tool-episode-render
+      name: 'dsh-muse-drama/drama-render'
+
+    - id: drama-settings
+      name: 'dsh-muse-drama/drama-settings'
+
+    - id: perception-bgm
+      name: 'dsh-muse-drama/bgm-match'

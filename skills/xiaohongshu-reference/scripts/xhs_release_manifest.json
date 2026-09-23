@@ -1,0 +1,18 @@
+{
+  "version": "v2.2.6",
+  "license_url": "https://raw.githubusercontent.com/xpzouying/xiaohongshu-mcp/v2.2.6/LICENSE",
+  "artifacts": [
+    {
+      "name": "xiaohongshu-login-windows-amd64.exe",
+      "url": "https://github.com/xpzouying/xiaohongshu-mcp/releases/download/v2.2.6/xiaohongshu-login-windows-amd64.exe",
+      "size": 10761216,
+      "sha256": "763259819202e7f83f8c3de392e295232f3eadf45e71d211bbcd3a67770354a1"
+    },
+    {
+      "name": "xiaohongshu-mcp-windows-amd64.exe",
+      "url": "https://github.com/xpzouying/xiaohongshu-mcp/releases/download/v2.2.6/xiaohongshu-mcp-windows-amd64.exe",
+      "size": 15490048,
+      "sha256": "16266fac57d756d1811bd1a6fdc77226e268810296b355d942e1616839fb88e3"
+    }
+  ]
+}

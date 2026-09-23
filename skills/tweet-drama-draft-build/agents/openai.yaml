@@ -1,0 +1,3 @@
+display_name: 推文短剧剪辑草稿
+short_description: 排序画面、音频和字幕，生成粗剪草稿。
+default_prompt: 使用推文短剧剪辑草稿，把已有画面和音频整理成剪辑草稿。
