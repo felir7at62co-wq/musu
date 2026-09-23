@@ -49,12 +49,20 @@ dsh plugin --profile web add dsh-muse-drama
 
 ### 桌面端（Electron 打包运行时）
 
-桌面端**不读** `<DSH_HOME>/profiles`，它跑自己打包的运行时与包集，所以必须显式接进来，否则会复现"默认 preset 是短剧模式、插件行却静默加载失败"的老毛病（症状：会话有短剧人格和技能，但 `drama_shot` / `drama_assets` / `drama-gate` 全都不在，主体身份门禁失效，生成的片子用错人）。两处改动：
+桌面端**不读** `<DSH_HOME>/profiles`，它跑自己打包的运行时与包集，所以必须显式接进来，否则会复现"默认 preset 是短剧模式、插件行却静默加载失败"的老毛病（症状：会话有短剧人格和技能，但 `drama_shot` / `drama_assets` / `drama-gate` 全都不在，主体身份门禁失效，生成的片子用错人）。
 
-1. `apps/desktop/src/core-package-set.ts` —— 把本包（或其 `vendor/muse/drama` 副本）加进打包的文件/依赖集；
-2. `apps/desktop-host/config/desktop.cordis.patch.yml` —— 加上与 `cordis.patch.yml` 相同的行（`drama-gate` / `tool-drama-assets` / `tool-shot-script` / `tool-bgm-compose` / `tool-episode-render` / `drama-settings` / `tool-jubian`），实现名指向本包子路径。
+桌面端的社区插件走 `third_party/plugins/` 钉版机制，`build.mjs` 有三条硬要求（实测）：
 
-改完必须重新打包桌面端；只改 profile 对已安装的桌面端无效。
+1. 拷进 staging 时会**剔除 `lib/`**（`filter: !/(node_modules|lib|\.git)/`）——**预编译包进不去，必须带源码构建**（toolchain 的 tsc/tsdown）；
+2. `package.json` 的 `version` 与 `license` 必须与 `sources.json` 的钉完全一致，且仓库里要有**非空 LICENSE**；
+3. 宿主版本变了（≠ `0.1.6-alpha.1`）会要求重新做兼容性复核。
+
+因此桌面端两条路，二选一：
+
+- **路线 A（推荐，合现有机制）**：把本仓库扩成**源码形态**——带各插件的 `src/`、`tsconfig.json` 与构建脚本，`sources.json` 钉 `{repository, version, commit, license}`，再把它加进 `DESKTOP_SOURCE_PLUGINS`，行照 `cordis.patch.yml` 加进 `apps/desktop-host/config/desktop.cordis.patch.yml`。仓库会变大（多出源码树），但完全走桌面端已有的门禁与构建。
+- **路线 B（改动宿主管线）**：保留预编译形态，改 `apps/desktop/src/core-package-set.ts` / `prepare-package-set.ts`，让桌面包集也能收一个不含 `lib/` 的预编译包。改动在宿主侧，会影响其它包集消费者。
+
+两条路都需要重新打包桌面端；只改 profile 对已安装的桌面端无效。
 
 ### 本机安装脚本
 
