@@ -47,6 +47,23 @@ dsh plugin --profile web add dsh-muse-drama
 
 安装后用 `dsh --profile web --dump-config` 能看到 `drama-gate` / `tool-shot-script` / … 各行，会话里则应出现 `drama_shot`、`drama_render`、`drama_assets`、`drama_bgm`、`drama_video`、`bgm_match` 与 `jubian_*`。
 
+### 桌面端（Electron 打包运行时）
+
+桌面端**不读** `<DSH_HOME>/profiles`，它跑自己打包的运行时与包集，所以必须显式接进来，否则会复现"默认 preset 是短剧模式、插件行却静默加载失败"的老毛病（症状：会话有短剧人格和技能，但 `drama_shot` / `drama_assets` / `drama-gate` 全都不在，主体身份门禁失效，生成的片子用错人）。两处改动：
+
+1. `apps/desktop/src/core-package-set.ts` —— 把本包（或其 `vendor/muse/drama` 副本）加进打包的文件/依赖集；
+2. `apps/desktop-host/config/desktop.cordis.patch.yml` —— 加上与 `cordis.patch.yml` 相同的行（`drama-gate` / `tool-drama-assets` / `tool-shot-script` / `tool-bgm-compose` / `tool-episode-render` / `drama-settings` / `tool-jubian`），实现名指向本包子路径。
+
+改完必须重新打包桌面端；只改 profile 对已安装的桌面端无效。
+
+### 本机安装脚本
+
+```sh
+node scripts/install-into-profile.mjs --profile web           # 只打印计划
+node scripts/install-into-profile.mjs --profile web --apply   # 写入 vendor + package.json
+cd "$DSH_HOME/profiles/web" && pnpm install                   # 然后重启宿主
+```
+
 ## 需要在 profile 里覆盖的配置
 
 只有两处与机器相关（其余字段省略即用插件默认值）：
