@@ -1,0 +1,87 @@
+[
+  {
+    "name": "jubian-asset-library",
+    "description": "Use when 新剧本需要角色、场景或道具，想在生图之前先从 56 个历史剧变项目的 8100 条资产里找现成的复用，包括按风格/类型/服装/地点检索、看本地图、判断可否复用。",
+    "directory": "jubian-asset-library"
+  },
+  {
+    "name": "jubian-snatch",
+    "description": "Use when 需要看剧变剧本池现在有多少本、哪些能领，或在指定时刻盯着新放出的剧本并第一时间抢下来（抢本/一键抢光），包括定时轮询、批量认领与抢后复核。",
+    "directory": "jubian-snatch"
+  },
+  {
+    "name": "shot-script-creator-9-16",
+    "description": "Use when 为仿真人短剧创作、改写或自检9:16竖屏镜头脚本，包括“做分镜”“生成镜头脚本”“写镜头脚本”“分镜创作”“分镜设计”以及视频生成前镜头检查。",
+    "directory": "shot-script-creator-9-16"
+  },
+  {
+    "name": "tweet-drama-asset-extract",
+    "description": "Use when 仿真人剧本需要提取角色服装版本、场景、道具和剧变 gpt-image-2 资产提示词，尤其是主角或重要配角需要用户提供服化道参考时。",
+    "directory": "tweet-drama-asset-extract"
+  },
+  {
+    "name": "tweet-drama-asset-vision-check",
+    "description": "对剧变生成的仿真人角色、场景、道具候选图做自动视觉审核，按剧本和风格评分，失败时定向改写提示词重生，通过后交给确认出演。",
+    "directory": "tweet-drama-asset-vision-check"
+  },
+  {
+    "name": "tweet-drama-background-render",
+    "description": "Use when 仿真人短剧需要后台合成、试听配乐、检查最终输出或批量导出。",
+    "directory": "tweet-drama-background-render"
+  },
+  {
+    "name": "tweet-drama-core",
+    "description": "仿真人剧变流水线公共能力：项目结构、唯一状态、资产 manifest、正式资产门禁、镜头与视频清单校验、日志和断点续跑。",
+    "directory": "tweet-drama-core"
+  },
+  {
+    "name": "tweet-drama-delivery",
+    "description": "Use when 组装或检查仿真人短剧的交付目录，把已确认通过的集按用户本机的 +++交付模板 归集成**整部剧一份**的可交付目录（成片、男女主角资产图、全剧海报、剧本与简介），或询问交付模板里每个目录该放什么、由谁负责、是不是每集一套。",
+    "directory": "tweet-drama-delivery"
+  },
+  {
+    "name": "tweet-drama-draft-build",
+    "description": "Use when 仿真人短剧需要可编辑草稿、实际发声字幕、音频校时或待处理镜头预览。",
+    "directory": "tweet-drama-draft-build"
+  },
+  {
+    "name": "tweet-drama-early-shot-script",
+    "description": "Use when 仿真人镜头脚本需要编译、检查节奏、绑定正式资产或打包为剧变视频任务。",
+    "directory": "tweet-drama-early-shot-script"
+  },
+  {
+    "name": "tweet-drama-key-manager",
+    "description": "Use when 仿真人剧变流水线需要检查 JubianAI 登录态、基址、本地剪辑路径或当前用户的项目收费授权范围。",
+    "directory": "tweet-drama-key-manager"
+  },
+  {
+    "name": "tweet-drama-pipeline",
+    "description": "Use when 用户要求从仿真人剧本创建、续跑或检查完整短剧制作流水线。",
+    "directory": "tweet-drama-pipeline"
+  },
+  {
+    "name": "tweet-drama-project-inspect",
+    "description": "Use when 检查仿真人剧变项目完成状态、产物缺口、收费任务或续跑点。",
+    "directory": "tweet-drama-project-inspect"
+  },
+  {
+    "name": "tweet-drama-script-convert",
+    "description": "推文短剧剧本文档转换 skill。用于 agents 在创建项目时把用户提供的 .doc、.docx、.txt、.md 剧本文件复制归档到项目 source/original/，并转换/清洗为 source/source_script.txt，供后续分集拆分、少字检查、资产提取和镜头脚本生成使用。",
+    "directory": "tweet-drama-script-convert"
+  },
+  {
+    "name": "tweet-drama-script-split",
+    "description": "推文短剧剧本拆分 skill。用于 agents 从 txt/doc/docx/markdown 剧本中识别集数、拆分保存单集文本，并检查少字、漏字、重复、标题边界错误。",
+    "directory": "tweet-drama-script-split"
+  },
+  {
+    "name": "tweet-drama-shot-asset-match",
+    "description": "仿真人镜头与剧变正式资产匹配。逐镜头绑定确认出演的人物服装版本、场景和道具，输出带 Jubian asset/material ID 与 URL 的 matched JSON。",
+    "directory": "tweet-drama-shot-asset-match"
+  },
+  {
+    "name": "xiaohongshu-reference",
+    "description": "Use when 需要通过本地 xpzouying/xiaohongshu-mcp 只读检索小红书高赞图文参考、读取详情、下载公开参考图并保存可审核清单，尤其用于仿真人角色服装、妆发和抽象五官审美参考。",
+    "directory": "xiaohongshu-reference"
+  }
+]

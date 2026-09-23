@@ -9,8 +9,8 @@
  * HARNESS=D:/dsh node scripts/assemble.mjs
  */
 
-import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -72,6 +72,56 @@ const skillsRoot = join(HARNESS, 'packages/drama/skills/skills')
 const skills = (await readdir(skillsRoot, { withFileTypes: true })).filter(entry => entry.isDirectory())
 for (const skill of skills) await copyDir(join(skillsRoot, skill.name), join(OUT, 'skills', skill.name))
 console.log(`skills copied: ${skills.length}`)
+
+/**
+ * Read `name`, `description` and `whenToUse` out of one skill's frontmatter.
+ *
+ * The runtime plugin reads `skills/index.json` instead of parsing YAML, so this is the
+ * only place that has to understand the frontmatter — and it says so out loud when a
+ * skill cannot be described, rather than shipping a silently missing skill.
+ *
+ * @param file - Absolute path to a `SKILL.md`.
+ * @returns The three routing fields, or undefined when the frontmatter carries no name.
+ */
+function readSkillHeader(file) {
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/u)
+  if (lines[0]?.trim() !== '---') return undefined
+  const fields = {}
+  let key = null
+  for (const line of lines.slice(1)) {
+    if (line.trim() === '---') break
+    const match = /^([A-Za-z][\w-]*):\s?(.*)$/u.exec(line)
+    if (match !== null) {
+      key = match[1]
+      const value = match[2].trim()
+      fields[key] = value === '>' || value === '|' || value === '>-' || value === '|-' ? '' : value
+      continue
+    }
+    if (key !== null && /^\s+\S/u.test(line)) fields[key] = `${fields[key] ?? ''} ${line.trim()}`.trim()
+    else key = null
+  }
+  const unquote = value => value === undefined ? undefined
+    : value.replace(/^["'](.*)["']$/su, '$1').trim() || undefined
+  const name = unquote(fields.name)
+  return name === undefined ? undefined : {
+    name,
+    description: unquote(fields.description) ?? name,
+    ...unquote(fields.whenToUse) === undefined ? {} : { whenToUse: unquote(fields.whenToUse) },
+  }
+}
+
+const index = []
+for (const skill of skills) {
+  const header = readSkillHeader(join(OUT, 'skills', skill.name, 'SKILL.md'))
+  if (header === undefined) {
+    console.log(`skill WITHOUT readable frontmatter (not registered): ${skill.name}`)
+    continue
+  }
+  if (header.name !== skill.name) console.log(`skill name differs from its directory: ${skill.name} -> ${header.name}`)
+  index.push({ ...header, directory: skill.name })
+}
+await writeFile(join(OUT, 'skills', 'index.json'), `${JSON.stringify(index, null, 2)}\n`)
+console.log(`skills indexed: ${index.length}`)
 
 const preset = process.env.PRESET ?? 'C:/Users/EDY/.dsh/.agent-presets/short-drama-local'
 await mkdir(join(OUT, 'presets/short-drama'), { recursive: true })

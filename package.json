@@ -25,6 +25,7 @@
     "./jubian/typert": "./lib/jubian/typert.host.js",
     "./jubian/remote": "./lib/jubian/typert.remote-client.js",
     "./bgm-match": "./lib/bgm-match/index.js",
+    "./skill-source": "./runtime/skills.js",
     "./skills/*": "./skills/*",
     "./presets/*": "./presets/*",
     "./assets/*": "./assets/*",
@@ -33,6 +34,7 @@
   },
   "files": [
     "lib",
+    "runtime",
     "skills",
     "presets",
     "assets",

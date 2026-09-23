@@ -19,6 +19,7 @@ import YAML from 'yaml'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
+import Skills from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 
@@ -35,7 +36,13 @@ const EXPECTED = new Map([
   ['drama-render', ['drama_render', 'drama_video']],
   ['drama-settings', null],
   ['bgm-match', ['bgm_match']],
+  ['skill-source', null],
 ])
+
+/** Where one subpath's entry lives: the vendored plugins under `lib/`, hand-written code under `runtime/`. */
+function entryOf(id) {
+  return id === 'skill-source' ? join(ROOT, 'runtime', 'skills.js') : join(ROOT, 'lib', id, 'index.js')
+}
 
 /** Host services these plugins inject but this verification composition does not mount. */
 const STUBS = [
@@ -46,7 +53,7 @@ const STUBS = [
 /** Rows this package would contribute on its own, keyed by subpath. */
 async function ownRows() {
   const rows = new Map()
-  for (const id of EXPECTED.keys()) rows.set(`${PACKAGE_NAME}/${id}`, join(ROOT, 'lib', id, 'index.js'))
+  for (const id of EXPECTED.keys()) rows.set(`${PACKAGE_NAME}/${id}`, entryOf(id))
   return rows
 }
 
@@ -95,6 +102,7 @@ try {
   await writeFile(config, [
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
+    "- name: '@deepseek-ai/dsh-skill'",
     ...STUBS.map(([specifier]) => `- name: '${specifier}'`),
     ...[...rows.keys()].map(name => `- name: '${name}'`),
     '',
@@ -107,6 +115,7 @@ try {
   const modules = new Map([
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', Tools],
+    ['@deepseek-ai/dsh-skill', Skills],
     ...STUBS,
     ...[...rows].map(([name, file]) => [name, undefined]),
   ])
@@ -140,7 +149,22 @@ try {
   const drama = [...registered].filter(tool => /^(drama_|jubian_|bgm_match)/.test(tool)).sort()
   console.log(`\nrows: ${rows.size}${profileDir === undefined ? '' : ` (from profile ${profileName})`}`)
   console.log(`registered drama tools (${drama.length}): ${drama.join(', ')}`)
-  console.log(failures === 0 ? '\nVERIFY: all rows applied and registered their tools' : `\nVERIFY: ${failures} row(s) failed`)
+
+  const skills = ctx.get('skills')
+  const expected = JSON.parse(await readFile(join(ROOT, 'skills', 'index.json'), 'utf8')).map(entry => entry.name)
+  let listed = []
+  if (skills !== undefined) {
+    const read = typeof skills.list === 'function' ? skills.list : skills.catalog
+    if (typeof read === 'function') {
+      const result = await read.call(skills, {})
+      listed = (Array.isArray(result) ? result : result?.items ?? []).map(entry => entry.name)
+    }
+  }
+  const missingSkills = expected.filter(skill => !listed.includes(skill))
+  if (missingSkills.length > 0) failures += 1
+  console.log(`registered skills: ${listed.length}/${expected.length}`
+    + (missingSkills.length === 0 ? '' : ` — MISSING: ${missingSkills.join(', ')}`))
+  console.log(failures === 0 ? '\nVERIFY: all rows applied, tools and skills registered' : `\nVERIFY: ${failures} check(s) failed`)
 } finally {
   await ctx.fiber.dispose()
   await rm(root, { recursive: true, force: true })

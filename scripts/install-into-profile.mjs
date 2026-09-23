@@ -99,7 +99,7 @@ const peers = existsSync(join(harness, 'packages'))
 const missingPeers = peers.filter(([name]) => !existsSync(join(target, 'node_modules', name, 'package.json')))
 
 console.log(`profile:  ${profile}`)
-console.log(`vendor:   ${target} ${needsCopy ? '(copy this package)' : '(already vendored)'}`)
+console.log(`vendor:   ${target} ${needsCopy ? '(copy this package)' : '(refresh from this package)'}`)
 console.log(`deps:     ${needsDependency ? `add "${PACKAGE_NAME}": "workspace:^"` : 'already declared'}`)
 console.log(`bundles:  ${needsBundle ? `append "${PACKAGE_NAME}"` : 'already listed'}`)
 console.log(`link:     ${link} ${needsLink ? '(create)' : '(already linked)'}`)
@@ -107,29 +107,24 @@ console.log(`peers:    ${missingPeers.length === 0
   ? `${peers.length} harness packages already linked`
   : `link ${missingPeers.map(([name]) => name).join(', ')} from ${harness}`}`)
 
-if (!needsCopy && !needsDependency && !needsBundle && !needsLink && missingPeers.length === 0) {
-  console.log('\nnothing to do; restart the host if the plugin is not mounted yet')
-  process.exit(0)
-}
-
 if (!apply) {
   console.log('\nplan only — re-run with --apply to write. No `pnpm install` is needed: the profile'
     + '\nalready resolves the harness packages it links, and this writes the node_modules link itself.')
   process.exit(0)
 }
 
-if (needsCopy) {
-  await rm(target, { recursive: true, force: true })
-  await mkdir(target, { recursive: true })
-  for (const entry of ['package.json', 'cordis.patch.yml', 'README.md']) {
-    await cp(join(SOURCE, entry), join(target, entry))
-  }
-  for (const entry of ['lib', 'skills', 'presets', 'assets', 'scripts']) {
-    await cp(join(SOURCE, entry), join(target, entry), { recursive: true })
-  }
-  const size = (await stat(join(target, 'package.json'))).size
-  console.log(`copied package (${size} byte manifest)`)
+// Always refreshed: the vendored copy is what the host loads, so a stale one would keep
+// serving old rows and old plugin builds after this package changed.
+await rm(target, { recursive: true, force: true })
+await mkdir(target, { recursive: true })
+for (const entry of ['package.json', 'cordis.patch.yml', 'README.md']) {
+  await cp(join(SOURCE, entry), join(target, entry))
 }
+for (const entry of ['lib', 'runtime', 'skills', 'presets', 'assets', 'scripts']) {
+  await cp(join(SOURCE, entry), join(target, entry), { recursive: true })
+}
+const size = (await stat(join(target, 'package.json'))).size
+console.log(`${needsCopy ? 'copied package into the profile' : 'refreshed the vendored copy'} (${size} byte manifest)`)
 
 if (needsLink) {
   await mkdir(join(profile, 'node_modules'), { recursive: true })
@@ -138,13 +133,14 @@ if (needsLink) {
   console.log('linked into the profile node_modules')
 }
 
-for (const [name, found] of missingPeers) {
+// Recreated on every apply: the refresh above replaces the whole vendored tree, links included.
+for (const [name, found] of peers) {
   const peerLink = join(target, 'node_modules', name)
   await mkdir(dirname(peerLink), { recursive: true })
   await rm(peerLink, { recursive: true, force: true })
   await symlink(found, peerLink, 'junction')
 }
-if (missingPeers.length > 0) console.log(`linked ${missingPeers.length} harness packages beside the vendored copy`)
+if (peers.length > 0) console.log(`linked ${peers.length} harness packages beside the vendored copy`)
 
 if (needsDependency || needsBundle) {
   const backup = `${manifestPath}.bak-musu`

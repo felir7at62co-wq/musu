@@ -51,3 +51,8 @@
 
     - id: perception-bgm
       name: 'dsh-muse-drama/bgm-match'
+
+    # 17 个短剧技能。注册源是本包的 skills/（安装时随包一起落盘），
+    # 所以换机器、换宿主都不需要再单独配技能根。
+    - id: muse-drama-skills
+      name: 'dsh-muse-drama/skill-source'

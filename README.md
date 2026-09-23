@@ -17,7 +17,8 @@
 
 另外包含：
 
-- `skills/` —— 17 个短剧技能（`tweet-drama-*`、`shot-script-creator-9-16`、`jubian-asset-library`、`jubian-snatch`、`xiaohongshu-reference`）；
+- `skills/` —— 17 个短剧技能（`tweet-drama-*`、`shot-script-creator-9-16`、`jubian-asset-library`、`jubian-snatch`、`xiaohongshu-reference`），外加 vendor 时生成的 `skills/index.json`（技能的 name/description/whenToUse，避免运行时解析 YAML）；
+- `runtime/skills.js` —— 技能源插件（patch 行 `muse-drama-skills` → `dsh-muse-drama/skill-source`）：读 `skills/index.json`，把每个技能连同它的 `resourceBase`（技能目录，保证正文里的 `scripts/…` 相对路径可解析）注册进 `skills` 服务。**换机器、换宿主都不需要再单独配技能根**；
 - `presets/short-drama/` —— 短剧 Agent 预设参考副本（`agent.cordis.yml` + `preset.yml`）；
 - `assets/muse-med-logo-{black,white}.webp`、`assets/muse-med-logo.png` —— MUSE 黑白蜘蛛品牌图。
 
@@ -82,7 +83,7 @@ node scripts/verify-load.mjs                # 用包自己的 8 个子路径
 node scripts/verify-load.mjs --profile web  # 用真实 profile 的 bundle 列表与解析器
 ```
 
-两者都真起一个 `cordis-plugin-loader`、真 import 编译产物，然后读 Tool 注册表；`--profile` 模式读的是 profile `package.json` 的 bundles 与各 bundle 的 `cordis.patch.yml`，等价于宿主重启后会挂载的那一组行。期望输出：8 行 ok、14 个短剧工具。
+两者都真起一个 `cordis-plugin-loader`、真 import 编译产物，然后读 Tool 与 Skill 注册表；`--profile` 模式读的是 profile `package.json` 的 bundles 与各 bundle 的 `cordis.patch.yml`，等价于宿主重启后会挂载的那一组行。期望输出：9 行 ok、14 个短剧工具、17/17 技能。
 
 ## 需要在 profile 里覆盖的配置
 
