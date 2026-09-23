@@ -14,7 +14,7 @@
  * node scripts/install-into-profile.mjs --profile web --apply    # write
  */
 
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -49,19 +49,23 @@ const bundles = manifest.dsh?.profile?.bundles ?? []
 const needsCopy = !existsSync(join(target, 'package.json'))
 const needsDependency = dependencies[PACKAGE_NAME] === undefined
 const needsBundle = !bundles.includes(PACKAGE_NAME)
+const link = join(profile, 'node_modules', PACKAGE_NAME)
+const needsLink = !existsSync(join(link, 'package.json'))
 
 console.log(`profile:  ${profile}`)
 console.log(`vendor:   ${target} ${needsCopy ? '(copy this package)' : '(already vendored)'}`)
 console.log(`deps:     ${needsDependency ? `add "${PACKAGE_NAME}": "workspace:^"` : 'already declared'}`)
 console.log(`bundles:  ${needsBundle ? `append "${PACKAGE_NAME}"` : 'already listed'}`)
+console.log(`link:     ${link} ${needsLink ? '(create)' : '(already linked)'}`)
 
-if (!needsCopy && !needsDependency && !needsBundle) {
+if (!needsCopy && !needsDependency && !needsBundle && !needsLink) {
   console.log('\nnothing to do; restart the host if the plugin is not mounted yet')
   process.exit(0)
 }
 
 if (!apply) {
-  console.log('\nplan only — re-run with --apply to write, then run `pnpm install` in the profile and restart the host')
+  console.log('\nplan only — re-run with --apply to write. No `pnpm install` is needed: the profile'
+    + '\nalready resolves the harness packages it links, and this writes the node_modules link itself.')
   process.exit(0)
 }
 
@@ -78,7 +82,16 @@ if (needsCopy) {
   console.log(`copied package (${size} byte manifest)`)
 }
 
+if (needsLink) {
+  await mkdir(join(profile, 'node_modules'), { recursive: true })
+  await rm(link, { recursive: true, force: true })
+  await symlink(target, link, 'junction')
+  console.log('linked into the profile node_modules')
+}
+
 if (needsDependency || needsBundle) {
+  const backup = `${manifestPath}.bak-musu`
+  if (!existsSync(backup)) await cp(manifestPath, backup)
   manifest.dependencies = { ...dependencies, ...needsDependency ? { [PACKAGE_NAME]: 'workspace:^' } : {} }
   manifest.dsh = {
     ...manifest.dsh,
@@ -91,4 +104,5 @@ if (needsDependency || needsBundle) {
   console.log('updated profile package.json')
 }
 
-console.log(`\nnext: cd "${profile}" && pnpm install, then restart the host`)
+console.log('\nnext: restart the host (a live profile patch reload may mount the rows without one).\n'
+  + `backup of the previous profile manifest: ${manifestPath}.bak-musu`)
