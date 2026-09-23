@@ -2,10 +2,10 @@
  * Install this package into a DSH profile.
  *
  * A profile resolves plugins through its own `node_modules`, and the profile's
- * `pnpm-workspace.yaml` already treats `vendor/*/*` as workspace members — so this
- * copies the package into `<profile>/vendor/muse/drama`, then adds it to the profile
- * `dependencies` and to `dsh.profile.bundles`, which is what makes the loader apply
- * `cordis.patch.yml`. Both edits are idempotent.
+ * `pnpm-workspace.yaml` already treats each `vendor` subdirectory as a workspace
+ * member — so this copies the package into `<profile>/vendor/muse/drama`, then adds
+ * it to the profile `dependencies` and to `dsh.profile.bundles`, which is what makes
+ * the loader apply `cordis.patch.yml`. Both edits are idempotent.
  *
  * Prints the plan and changes nothing unless `--apply` is given.
  *
