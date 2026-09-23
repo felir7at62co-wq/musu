@@ -9,7 +9,7 @@
  * HARNESS=D:/dsh node scripts/assemble.mjs
  */
 
-import { cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -123,11 +123,35 @@ for (const skill of skills) {
 await writeFile(join(OUT, 'skills', 'index.json'), `${JSON.stringify(index, null, 2)}\n`)
 console.log(`skills indexed: ${index.length}`)
 
+/** Workspace specifier -> this package's subpath, for presets authored against the checkout. */
+const PRESET_REWRITES = [
+  ['@deepseek-ai/dsh-tool-jubian', 'dsh-muse-drama/jubian'],
+  ['@deepseek-ai/dsh-guard-drama', 'dsh-muse-drama/drama-gate'],
+  ['@deepseek-ai/dsh-tool-drama-assets', 'dsh-muse-drama/drama-assets'],
+  ['@deepseek-ai/dsh-tool-shot-script', 'dsh-muse-drama/drama-shot'],
+  ['@deepseek-ai/dsh-tool-bgm-compose', 'dsh-muse-drama/drama-bgm'],
+  ['@deepseek-ai/dsh-tool-episode-render', 'dsh-muse-drama/drama-render'],
+  ['@deepseek-ai/dsh-drama-settings', 'dsh-muse-drama/drama-settings'],
+  ['@deepseek-ai/dsh-perception-bgm', 'dsh-muse-drama/bgm-match'],
+]
+
 const preset = process.env.PRESET ?? 'C:/Users/EDY/.dsh/.agent-presets/short-drama-local'
 await mkdir(join(OUT, 'presets/short-drama'), { recursive: true })
 for (const name of await readdir(preset)) {
   if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue
-  await cp(join(preset, name), join(OUT, 'presets/short-drama', name))
+  let text = await readFile(join(preset, name), 'utf8')
+  // The shipped preset must compose THIS package. Left pointing at the checkout's
+  // workspace names, it would mount a second copy of the same rows elsewhere.
+  if (name.startsWith('agent.cordis')) {
+    for (const [from, to] of PRESET_REWRITES) text = text.split(`'${from}'`).join(`'${to}'`)
+    const leftover = [...text.matchAll(/name:\s*'(@deepseek-ai\/dsh-[a-z-]+)'/gu)]
+      .map(match => match[1])
+      .filter(specifier => !/dsh-(persona|agent-instructions|tool-|command-|compaction|plan-mode|guards?)/u.test(specifier))
+    if (leftover.length > 0) console.log(`preset still names workspace plugins: ${[...new Set(leftover)].join(', ')}`)
+    const rows = [...text.matchAll(/name:\s*'(dsh-muse-drama\/[a-z-]+)'/gu)].map(match => match[1])
+    console.log(`preset rows pointing at this package: ${rows.join(', ')}`)
+  }
+  await writeFile(join(OUT, 'presets/short-drama', name), text)
   console.log(`preset file: ${name}`)
 }
 

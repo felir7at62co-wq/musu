@@ -48,6 +48,24 @@ dsh plugin --profile web add dsh-muse-drama
 
 安装后用 `dsh --profile web --dump-config` 能看到 `drama-gate` / `tool-shot-script` / … 各行，会话里则应出现 `drama_shot`、`drama_render`、`drama_assets`、`drama_bgm`、`drama_video`、`bgm_match` 与 `jubian_*`。
 
+### 本包自带的 short-drama 预设
+
+`presets/short-drama/agent.cordis.yml` 的行**已经指向本包**（`dsh-muse-drama/jubian`、`drama-gate`、`drama-assets`、`drama-shot`、`drama-bgm`、`drama-render`），所以把它挂进 roster 时不会再去挂检出里的工作区同名包。挂法是一行配置（`roots` 与 `includeShippedRoot`/`includeUserRoot` 并存）：
+
+```yaml
+- id: agent-presets
+  config:
+    roots:
+      - path: 'C:\Users\EDY\.dsh\profiles\web\vendor\muse\drama\presets'
+        trust: system
+```
+
+该预设**不含** `bgm_match` 与技能行：前者是部署层行，后者由本包 bundle 层的 `muse-drama-skills` 提供，因此同一宿主里的任何会话都能拿到这套技能。
+
+### 仍然需要单独安装的第三方包
+
+短剧模式还用到 **`dsh-ffmpeg`**（11 个 `ffmpeg_*` 工具）等社区包 —— 本包不重复分发别人的包，按 profile 的 `dsh.profile.bundles` 与 `dependencies` 单独列即可（示例 profile 已经这样做了）。
+
 ### 桌面端（Electron 打包运行时）
 
 桌面端**不读** `<DSH_HOME>/profiles`，它跑自己打包的运行时与包集，所以必须显式接进来，否则会复现"默认 preset 是短剧模式、插件行却静默加载失败"的老毛病（症状：会话有短剧人格和技能，但 `drama_shot` / `drama_assets` / `drama-gate` 全都不在，主体身份门禁失效，生成的片子用错人）。

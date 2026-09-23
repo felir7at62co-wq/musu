@@ -206,7 +206,7 @@
 # the transport's own origin and timeout): a preset is the wrong place to pin a
 # token, an origin, or a budget.
 - id: tool-jubian
-  name: '@deepseek-ai/dsh-tool-jubian'
+  name: 'dsh-muse-drama/jubian'
 
 # ── short-drama gates ───────────────────────────────────────────────────────
 
@@ -233,7 +233,7 @@
 # it reads under is `short-drama/`, matching the workspace layout the prompt
 # above fixes.
 - id: drama-gate
-  name: '@deepseek-ai/dsh-guard-drama'
+  name: 'dsh-muse-drama/drama-gate'
 
 # ── short-drama pipeline tools ──────────────────────────────────────────────
 
@@ -248,7 +248,7 @@
 # records one human decision. Both methods write only _probe/asset-reconcile.json;
 # they never call a paid or remote write method.
 - id: tool-drama-assets
-  name: '@deepseek-ai/dsh-tool-drama-assets'
+  name: 'dsh-muse-drama/drama-assets'
 
 # `drama_shot` owns the shot-script gate the skills describe in prose: it
 # validates script structure and official asset references, reports creative
@@ -257,7 +257,7 @@
 # used by the video stage. Every method is local and free; it never submits a
 # generation task.
 - id: tool-shot-script
-  name: '@deepseek-ai/dsh-tool-shot-script'
+  name: 'dsh-muse-drama/drama-shot'
 
 # `drama_bgm` consumes the Agent's explicit episodes/segments music plan after
 # `bgm_match` has only proposed candidates. It previews source starts and gains,
@@ -265,7 +265,7 @@
 # it does not import the matcher runtime; using its candidates still carries the
 # m-a-p/MERT-v1-95M CC-BY-NC-4.0 non-commercial restriction.
 - id: tool-bgm-compose
-  name: '@deepseek-ai/dsh-tool-bgm-compose'
+  name: 'dsh-muse-drama/drama-bgm'
   config:
     ffmpegPath: C:\Users\EDY\AppData\Local\ffmpeg\bin\ffmpeg.exe
     ffprobePath: C:\Users\EDY\AppData\Local\ffmpeg\bin\ffprobe.exe
@@ -278,7 +278,7 @@
 # delivery contract. The style is deliberately not configurable: it is the
 # spec the operator confirmed.
 - id: tool-episode-render
-  name: '@deepseek-ai/dsh-tool-episode-render'
+  name: 'dsh-muse-drama/drama-render'
 
 # ── goals ───────────────────────────────────────────────────────────────────
 

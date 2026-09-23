@@ -81,16 +81,35 @@ async function profileRows(profile) {
   return rows
 }
 
+/** Rows the packaged preset names, resolved through this package's own exports. */
+async function presetRows(file) {
+  const require = createRequire(join(ROOT, 'package.json'))
+  const text = await readFile(file, 'utf8')
+  const rows = new Map()
+  for (const match of text.matchAll(/name:\s*'(dsh-muse-drama\/[a-z-]+)'/gu)) {
+    rows.set(match[1], require.resolve(match[1]))
+  }
+  return rows
+}
+
 const argv = process.argv.slice(2)
 const flagIndex = argv.indexOf('--profile')
 const profileName = flagIndex === -1 ? undefined : argv[flagIndex + 1]
+const presetFile = argv.includes('--preset')
+  ? join(ROOT, 'presets', 'short-drama', 'agent.cordis.yml')
+  : undefined
 const profileDir = profileName === undefined
   ? undefined
   : join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'profiles', profileName)
 
-const rows = profileDir === undefined ? await ownRows() : await profileRows(profileDir)
+const rows = presetFile !== undefined
+  ? await presetRows(presetFile)
+  : profileDir === undefined ? await ownRows() : await profileRows(profileDir)
+const source = presetFile !== undefined
+  ? 'packaged preset'
+  : profileDir === undefined ? 'own subpaths' : `profile ${profileName}`
 if (rows.size === 0) {
-  console.error(profileName === undefined ? 'no rows found' : `profile ${profileName} contributes no ${PACKAGE_NAME} rows`)
+  console.error(`no ${PACKAGE_NAME} rows found in the ${source}`)
   process.exit(1)
 }
 
@@ -147,11 +166,16 @@ try {
     console.log(`${id.padEnd(16)} ${state}`)
   }
   const drama = [...registered].filter(tool => /^(drama_|jubian_|bgm_match)/.test(tool)).sort()
-  console.log(`\nrows: ${rows.size}${profileDir === undefined ? '' : ` (from profile ${profileName})`}`)
+  console.log(`\nrows: ${rows.size} (from ${source})`)
   console.log(`registered drama tools (${drama.length}): ${drama.join(', ')}`)
 
   const skills = ctx.get('skills')
-  const expected = JSON.parse(await readFile(join(ROOT, 'skills', 'index.json'), 'utf8')).map(entry => entry.name)
+  // Skills are asserted only when this composition mounts the package's skill source:
+  // the bundle patch carries that row, an agent preset does not.
+  const expectsSkills = [...rows.keys()].some(nameOf => nameOf.endsWith('/skill-source'))
+  const expected = expectsSkills
+    ? JSON.parse(await readFile(join(ROOT, 'skills', 'index.json'), 'utf8')).map(entry => entry.name)
+    : []
   let listed = []
   if (skills !== undefined) {
     const read = typeof skills.list === 'function' ? skills.list : skills.catalog
@@ -162,8 +186,10 @@ try {
   }
   const missingSkills = expected.filter(skill => !listed.includes(skill))
   if (missingSkills.length > 0) failures += 1
-  console.log(`registered skills: ${listed.length}/${expected.length}`
-    + (missingSkills.length === 0 ? '' : ` — MISSING: ${missingSkills.join(', ')}`))
+  console.log(expectsSkills
+    ? `registered skills: ${listed.length}/${expected.length}`
+      + (missingSkills.length === 0 ? '' : ` — MISSING: ${missingSkills.join(', ')}`)
+    : 'registered skills: not mounted by this composition')
   console.log(failures === 0 ? '\nVERIFY: all rows applied, tools and skills registered' : `\nVERIFY: ${failures} check(s) failed`)
 } finally {
   await ctx.fiber.dispose()
