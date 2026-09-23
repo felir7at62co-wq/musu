@@ -61,8 +61,20 @@ dsh plugin --profile web add dsh-muse-drama
 ```sh
 node scripts/install-into-profile.mjs --profile web           # 只打印计划
 node scripts/install-into-profile.mjs --profile web --apply   # 写入 vendor + package.json
-cd "$DSH_HOME/profiles/web" && pnpm install                   # 然后重启宿主
 ```
+
+脚本做四件事（幂等，默认 dry-run）：把包复制到 `<profile>/vendor/muse/drama`；在 `<profile>/node_modules` 建 `dsh-muse-drama` 软链；把 `dependencies` 与 `dsh.profile.bundles` 各加一条；把包需要的 10 个 harness 包**从检出**接进 `vendor/muse/drama/node_modules`。
+
+最后一件事不是多余的：profile 里可能躺着更早 vendored 的同名副本，包内编译产物按检出编的，撞上旧副本会在 import 期直接失败——实测 `<profile>/vendor/jubian/jubian` 的 `dsh-jubian` 缺 `checkBudget`，会让 `jubian` 行起不来。检出路径用 `--harness` 覆盖（默认 `E:/deepseek-harness`，也可用 `HARNESS`）。
+
+### 加载自检（不需要重启宿主）
+
+```sh
+node scripts/verify-load.mjs                # 用包自己的 8 个子路径
+node scripts/verify-load.mjs --profile web  # 用真实 profile 的 bundle 列表与解析器
+```
+
+两者都真起一个 `cordis-plugin-loader`、真 import 编译产物，然后读 Tool 注册表；`--profile` 模式读的是 profile `package.json` 的 bundles 与各 bundle 的 `cordis.patch.yml`，等价于宿主重启后会挂载的那一组行。期望输出：8 行 ok、14 个短剧工具。
 
 ## 需要在 profile 里覆盖的配置
 

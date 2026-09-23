@@ -14,7 +14,7 @@
  * node scripts/install-into-profile.mjs --profile web --apply    # write
  */
 
-import { cp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -23,6 +23,45 @@ import { fileURLToPath } from 'node:url'
 const PACKAGE_NAME = 'dsh-muse-drama'
 const VENDOR_PATH = ['vendor', 'muse', 'drama']
 const SOURCE = dirname(dirname(fileURLToPath(import.meta.url)))
+
+/** Harness packages this package's compiled entries import, and that the profile must supply. */
+const PEERS = [
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-tools',
+  '@deepseek-ai/dsh-credentials',
+  '@deepseek-ai/dsh-home-paths',
+  '@deepseek-ai/dsh-atomic-write',
+  '@deepseek-ai/dsh-typert-protocol',
+  '@deepseek-ai/schemastery',
+  '@deepseek-ai/dsh-jubian',
+  '@deepseek-ai/dsh-jubian-api',
+  'zod',
+]
+
+/**
+ * Resolve one harness package to the checkout that built this package's `lib/`.
+ *
+ * The profile may hold an older vendored copy of the same name and would otherwise
+ * win for a row of this package (observed: a vendored `dsh-jubian` without
+ * `checkBudget`, which fails the `jubian` row at import time).
+ *
+ * @param harness - Checkout root.
+ * @param name - Package specifier.
+ * @returns The package directory, or undefined when the checkout does not carry it.
+ */
+async function fromCheckout(harness, name) {
+  const candidates = [join(harness, 'node_modules', name)]
+  for (const group of await readdir(join(harness, 'packages'), { withFileTypes: true }).catch(() => [])) {
+    if (!group.isDirectory()) continue
+    for (const entry of await readdir(join(harness, 'packages', group.name), { withFileTypes: true }).catch(() => [])) {
+      if (entry.isDirectory()) candidates.push(join(harness, 'packages', group.name, entry.name, 'node_modules', name))
+    }
+  }
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'package.json'))) return candidate
+  }
+  return undefined
+}
 
 const argv = process.argv.slice(2)
 const apply = argv.includes('--apply')
@@ -52,13 +91,23 @@ const needsBundle = !bundles.includes(PACKAGE_NAME)
 const link = join(profile, 'node_modules', PACKAGE_NAME)
 const needsLink = !existsSync(join(link, 'package.json'))
 
+const harness = flag('harness') ?? process.env.HARNESS ?? 'E:/deepseek-harness'
+const peers = existsSync(join(harness, 'packages'))
+  ? (await Promise.all(PEERS.map(async name => [name, await fromCheckout(harness, name)])))
+    .filter(([, found]) => found !== undefined)
+  : []
+const missingPeers = peers.filter(([name]) => !existsSync(join(target, 'node_modules', name, 'package.json')))
+
 console.log(`profile:  ${profile}`)
 console.log(`vendor:   ${target} ${needsCopy ? '(copy this package)' : '(already vendored)'}`)
 console.log(`deps:     ${needsDependency ? `add "${PACKAGE_NAME}": "workspace:^"` : 'already declared'}`)
 console.log(`bundles:  ${needsBundle ? `append "${PACKAGE_NAME}"` : 'already listed'}`)
 console.log(`link:     ${link} ${needsLink ? '(create)' : '(already linked)'}`)
+console.log(`peers:    ${missingPeers.length === 0
+  ? `${peers.length} harness packages already linked`
+  : `link ${missingPeers.map(([name]) => name).join(', ')} from ${harness}`}`)
 
-if (!needsCopy && !needsDependency && !needsBundle && !needsLink) {
+if (!needsCopy && !needsDependency && !needsBundle && !needsLink && missingPeers.length === 0) {
   console.log('\nnothing to do; restart the host if the plugin is not mounted yet')
   process.exit(0)
 }
@@ -88,6 +137,14 @@ if (needsLink) {
   await symlink(target, link, 'junction')
   console.log('linked into the profile node_modules')
 }
+
+for (const [name, found] of missingPeers) {
+  const peerLink = join(target, 'node_modules', name)
+  await mkdir(dirname(peerLink), { recursive: true })
+  await rm(peerLink, { recursive: true, force: true })
+  await symlink(found, peerLink, 'junction')
+}
+if (missingPeers.length > 0) console.log(`linked ${missingPeers.length} harness packages beside the vendored copy`)
 
 if (needsDependency || needsBundle) {
   const backup = `${manifestPath}.bak-musu`
